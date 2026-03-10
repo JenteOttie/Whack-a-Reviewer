@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whack-a-Reviewer</title>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Crimson+Pro:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1008;
+    --paper: #f5f0e8;
+    --aged: #e8dfc8;
+    --red-mark: #c0392b;
+    --green-mark: #27ae60;
+    --stamp-red: #b03030;
+    --desk: #5c3d1e;
+    --desk-light: #7a5230;
+    --gold: #d4a843;
+    --shadow: rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--desk);
+    background-image:
+      repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(0,0,0,0.03) 40px, rgba(0,0,0,0.03) 41px),
+      repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(0,0,0,0.03) 40px, rgba(0,0,0,0.03) 41px),
+      radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 80%, rgba(0,0,0,0.15) 0%, transparent 50%);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5vh 1em;
+    font-family: 'Crimson Pro', serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.4;
+  }
+
+  h1 {
+    font-family: 'Special Elite', cursive;
+    color: var(--paper);
+    font-size: clamp(1.2rem, 2.5vw, 2rem);
+    letter-spacing: 0.05em;
+    text-shadow: 3px 3px 0 var(--ink), -1px -1px 0 rgba(0,0,0,0.3);
+    margin-bottom: 0.1em;
+    text-align: center;
+  }
+
+  .subtitle {
+    color: var(--aged);
+    font-size: clamp(0.7rem, 1.2vw, 0.9rem);
+    font-style: italic;
+    margin-bottom: 0.5em;
+    opacity: 0.85;
+    text-align: center;
+  }
+
+  /* HUD */
+  .hud {
+    display: flex;
+    gap: 1.5em;
+    margin-bottom: 0.5em;
+    background: var(--aged);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    padding: 0.3em 1.2em;
+    box-shadow: 4px 4px 0 var(--ink);
+    position: relative;
+  }
+
+  .hud-item {
+    text-align: center;
+    min-width: 80px;
+  }
+
+  .hud-label {
+    font-family: 'Special Elite', cursive;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #7a6040;
+  }
+
+  .hud-value {
+    font-family: 'Special Elite', cursive;
+    font-size: 1.1rem;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+
+  #score-val { color: var(--stamp-red); }
+  #timer-val { color: #2d5a27; }
+
+  /* Progress bar */
+  .progress-wrap {
+    width: min(min(520px, 92vw), 55vh);
+    margin-bottom: 0.4em;
+  }
+
+  .progress-label {
+    font-family: 'Special Elite', cursive;
+    font-size: 0.7rem;
+    color: var(--aged);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .progress-track {
+    height: 12px;
+    background: var(--aged);
+    border: 2px solid var(--ink);
+    border-radius: 3px;
+    box-shadow: 3px 3px 0 var(--ink);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: repeating-linear-gradient(
+      45deg,
+      var(--green-mark),
+      var(--green-mark) 8px,
+      #1e8a4a 8px,
+      #1e8a4a 16px
+    );
+    width: 0%;
+    transition: width 0.4s ease;
+    position: relative;
+  }
+
+  /* Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: min(min(520px, 92vw), 55vh);
+    aspect-ratio: 1;
+    margin-bottom: 1.5vh;
+  }
+
+  .cell {
+    background: var(--aged);
+    border: 2px solid #8a6a3a;
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+    cursor: default;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.15), 3px 3px 0 rgba(0,0,0,0.3);
+    transition: transform 0.05s;
+  }
+
+  .cell-num {
+    position: absolute;
+    top: 6px;
+    left: 9px;
+    font-family: 'Special Elite', cursive;
+    font-size: 0.85rem;
+    color: #8a6a3a;
+    z-index: 2;
+    user-select: none;
+  }
+
+  /* Hole */
+  .hole {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    height: 30%;
+    background: radial-gradient(ellipse at 50% 110%, #1a0f00 0%, #3d2200 60%, transparent 100%);
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    z-index: 3;
+  }
+
+  /* Paper review */
+  .reviewer {
+    position: absolute;
+    bottom: -100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 72%;
+    z-index: 4;
+    transition: bottom 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+  }
+
+  .reviewer.visible {
+    bottom: 18%;
+  }
+
+  .reviewer.hit {
+    animation: smack 0.25s ease forwards;
+  }
+
+  .reviewer.dodge {
+    bottom: -100%;
+    transition: bottom 0.15s ease-in;
+  }
+
+  @keyframes smack {
+    0% { transform: translateX(-50%) scale(1) rotate(0deg); filter: brightness(1); }
+    40% { transform: translateX(-50%) scale(0.7) rotate(-15deg); filter: brightness(2) saturate(0); }
+    100% { transform: translateX(-60%) scale(0.3) rotate(-40deg); opacity: 0; bottom: -40%; }
+  }
+
+  /* The hand + paper visual */
+  .hand-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .paper-sheet {
+    background: #fafaf5;
+    border: 1.5px solid #ccc;
+    border-radius: 3px;
+    padding: 6px 8px;
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+    width: 100%;
+    min-height: 60px;
+    position: relative;
+    font-size: clamp(0.35rem, 1.1vw, 0.5rem);
+    line-height: 1.4;
+    overflow: hidden;
+  }
+
+  .paper-sheet::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #ddd 0%, #f0f0f0 50%, #ddd 100%);
+  }
+
+  .paper-lines {
+    position: absolute;
+    inset: 8px 0 0 0;
+    background: repeating-linear-gradient(transparent, transparent 14px, #e8e8e8 14px, #e8e8e8 15px);
+    pointer-events: none;
+  }
+
+  .review-text {
+    position: relative;
+    z-index: 1;
+    font-family: 'Special Elite', cursive;
+    word-break: break-word;
+  }
+
+  .review-text.nasty { color: var(--red-mark); }
+  .review-text.nice { color: var(--green-mark); }
+
+  .hand-icon {
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+    line-height: 1;
+    filter: drop-shadow(2px 3px 3px rgba(0,0,0,0.5));
+    margin-top: 2px;
+  }
+
+  /* Hit flash */
+  .cell.flash-bad {
+    animation: flashBad 0.3s ease;
+  }
+  .cell.flash-good {
+    animation: flashGood 0.3s ease;
+  }
+  @keyframes flashBad {
+    0% { background: var(--aged); }
+    50% { background: #ffd0d0; }
+    100% { background: var(--aged); }
+  }
+  @keyframes flashGood {
+    0% { background: var(--aged); }
+    50% { background: #c8ffd0; }
+    100% { background: var(--aged); }
+  }
+
+  /* Floating score popup */
+  .popup {
+    position: fixed;
+    font-family: 'Special Elite', cursive;
+    font-size: 1.4rem;
+    pointer-events: none;
+    z-index: 200;
+    animation: popFloat 0.9s ease forwards;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+  }
+  @keyframes popFloat {
+    0% { transform: translateY(0) scale(0.5); opacity: 1; }
+    100% { transform: translateY(-70px) scale(1.1); opacity: 0; }
+  }
+
+  /* Screens */
+  .screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    padding: 2em;
+    text-align: center;
+  }
+
+  #start-screen { background: rgba(20, 10, 0, 0.92); }
+  #end-screen { background: rgba(20, 10, 0, 0.95); display: none; }
+
+  .screen-paper {
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    padding: 2.5em 2.5em 2em;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 8px 8px 0 var(--ink), 12px 12px 0 rgba(0,0,0,0.2);
+    position: relative;
+  }
+
+  .screen-paper::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border: 1px dashed #bbb;
+    pointer-events: none;
+  }
+
+  .screen h2 {
+    font-family: 'Special Elite', cursive;
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+    color: var(--ink);
+    margin-bottom: 0.5em;
+    line-height: 1.2;
+  }
+
+  .screen p {
+    color: #4a3010;
+    font-size: 1rem;
+    margin-bottom: 0.7em;
+    line-height: 1.5;
+  }
+
+  .key-hint {
+    display: inline-block;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Special Elite', cursive;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+
+  .rules {
+    background: #ede5d0;
+    border-left: 4px solid var(--stamp-red);
+    padding: 0.8em 1em;
+    margin: 1em 0;
+    text-align: left;
+    font-size: 0.9rem;
+  }
+
+  .rules li { margin-bottom: 0.35em; list-style: none; padding-left: 0.5em; }
+  .rules li::before { content: '— '; }
+  .r { color: var(--stamp-red); font-weight: 600; }
+  .g { color: var(--green-mark); font-weight: 600; }
+
+  .difficulty-wrap {
+    margin-top: 0.8em;
+  }
+  .diff-label {
+    font-family: 'Special Elite', cursive;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #7a6040;
+    margin-bottom: 0.5em;
+    text-align: center;
+  }
+  .diff-buttons {
+    display: flex;
+    gap: 0.6em;
+    justify-content: center;
+  }
+  .btn-diff {
+    font-size: 0.8rem;
+    padding: 0.5em 0.8em;
+    line-height: 1.3;
+    min-width: 110px;
+    text-align: center;
+  }
+  .btn-diff small {
+    display: block;
+    font-size: 0.65rem;
+    opacity: 0.85;
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+  }
+  .btn-mid { background: #8b5e1a; }
+  .btn-hard { background: #2c1a6e; }
+
+  .btn {
+    background: var(--stamp-red);
+    color: var(--paper);
+    border: 3px solid var(--ink);
+    font-family: 'Special Elite', cursive;
+    font-size: 1.2rem;
+    padding: 0.6em 2em;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 var(--ink);
+    transition: transform 0.08s, box-shadow 0.08s;
+    margin-top: 0.8em;
+    letter-spacing: 0.05em;
+  }
+
+  .btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 var(--ink); }
+  .btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--ink); }
+
+  .stamp {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-family: 'Special Elite', cursive;
+    font-size: 1.5rem;
+    color: var(--stamp-red);
+    border: 3px solid var(--stamp-red);
+    padding: 4px 8px;
+    border-radius: 4px;
+    transform: rotate(12deg);
+    opacity: 0.75;
+    line-height: 1;
+  }
+
+  .accepted-stamp {
+    font-family: 'Special Elite', cursive;
+    font-size: 2.8rem;
+    color: var(--green-mark);
+    border: 5px solid var(--green-mark);
+    padding: 8px 16px;
+    border-radius: 6px;
+    transform: rotate(-8deg);
+    opacity: 0.9;
+    display: inline-block;
+    margin: 0.4em 0;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+    animation: stampIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes stampIn {
+    from { transform: rotate(-8deg) scale(3); opacity: 0; }
+    to { transform: rotate(-8deg) scale(1); opacity: 0.9; }
+  }
+
+  #final-score { font-size: 3rem; color: var(--stamp-red); font-family: 'Special Elite', cursive; }
+</style>
+</head>
+<body>
+
+<!-- Start Screen -->
+<div class="screen" id="start-screen">
+  <div class="screen-paper">
+    <div class="stamp">PEER<br>REVIEW</div>
+    <h2>Whack-a-Reviewer</h2>
+    <p><em>"Your paper needs major revisions before it can be considered for publication."</em></p>
+    <div class="rules">
+      <ul>
+        <li>Press the <span class="key-hint">number key</span> matching the cell to whack.</li>
+        <li>Hit a <span class="r">red nasty reviewer</span>: <strong>+2 pts</strong></li>
+        <li>Miss a <span class="r">red reviewer</span> who escapes: <strong>−1 pt</strong></li>
+        <li>Hit a <span class="g">green supporter</span>: <strong>−3 pts</strong></li>
+        <li>Reach <strong>20 points</strong> to get your paper accepted!</li>
+      </ul>
+    </div>
+    <div class="difficulty-wrap">
+      <div class="diff-label">Select difficulty:</div>
+      <div class="diff-buttons">
+        <button class="btn btn-diff" onclick="startGame('easy')">🎓 Easy<br><small>Slow &amp; forgiving</small></button>
+        <button class="btn btn-diff btn-mid" onclick="startGame('medium')">🔬 Normal<br><small>Standard pace</small></button>
+        <button class="btn btn-diff btn-hard" onclick="startGame('hard')">💀 Hard<br><small>Ruthless &amp; fast</small></button>
+      </div>
+    </div>
+    <p style="margin-top:1em;font-size:0.78rem;color:#7a6040;font-style:italic;">© Jente Ottenburghs (created with Claude)</p>
+  </div>
+</div>
+
+<!-- End Screen -->
+<div class="screen" id="end-screen">
+  <div class="screen-paper">
+    <h2 id="end-title">Game Over</h2>
+    <div id="end-stamp-wrap"></div>
+    <p id="end-message"></p>
+    <p>Final Score: <span id="final-score">0</span></p>
+    <button class="btn" onclick="restartGame()">Try Again</button>
+  </div>
+</div>
+
+<!-- Game UI -->
+<h1>Whack-a-Reviewer</h1>
+<p class="subtitle">Get your paper accepted — one reviewer at a time.</p>
+
+<div class="hud">
+  <div class="hud-item">
+    <div class="hud-label">Score</div>
+    <div class="hud-value" id="score-val">0</div>
+  </div>
+  <div class="hud-item">
+    <div class="hud-label">Accepted in</div>
+    <div class="hud-value" id="timer-val">60s</div>
+  </div>
+  <div class="hud-item">
+    <div class="hud-label">Misses</div>
+    <div class="hud-value" id="miss-val">0</div>
+  </div>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-label">Paper acceptance progress ▸ 20 pts needed</div>
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const GRID_SIZE = 9;
+const GOAL = 20;
+const GAME_DURATION = 60;
+
+const DIFFICULTY = {
+  easy:   { stayMin: 1800, stayMax: 1200, spawnStart: 1600, spawnMin: 800,  nastyRatio: 0.68 },
+  medium: { stayMin: 1100, stayMax:  700, spawnStart: 1200, spawnMin: 500,  nastyRatio: 0.72 },
+  hard:   { stayMin:  650, stayMax:  400, spawnStart:  800, spawnMin: 300,  nastyRatio: 0.78 },
+};
+let diffConfig = DIFFICULTY.medium;
+const NASTY_REVIEWS = [
+  "Completely lacks novelty.",
+  "Related work is thin.",
+  "Equations are wrong.",
+  "Reject. Rewrite entirely.",
+  "Missing key citations.",
+  "The methodology is flawed.",
+  "Too speculative.",
+  "Figures are unreadable.",
+  "Below conference standards.",
+  "This is not new work.",
+  "Results are cherry-picked.",
+  "Proofs are incorrect.",
+  "Introduction is too long.",
+  "Experiments are lacking.",
+];
+const NICE_REVIEWS = [
+  "Great contribution!",
+  "Strong results.",
+  "Very well written.",
+  "Impressive methodology.",
+  "Accept as-is!",
+  "Novel and exciting.",
+  "Thorough evaluation.",
+  "Clear and concise.",
+];
+
+let score = 0;
+let misses = 0;
+let timeLeft = GAME_DURATION;
+let gameRunning = false;
+let activeReviewers = {}; // cellIndex -> { type, timeoutHide }
+let spawnInterval = null;
+let timerInterval = null;
+
+// Keyboard layout: top row = 7,8,9 | middle = 4,5,6 | bottom = 1,2,3
+// cellIndex 0..8 maps to keys [7,8,9,4,5,6,1,2,3]
+const CELL_KEYS = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+const KEY_TO_CELL = {};
+CELL_KEYS.forEach((k, i) => KEY_TO_CELL[k] = i);
+
+// Build grid
+const grid = document.getElementById('grid');
+for (let i = 0; i < GRID_SIZE; i++) {
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.id = `cell-${i}`;
+  cell.innerHTML = `
+    <span class="cell-num">${CELL_KEYS[i]}</span>
+    <div class="hole"></div>
+    <div class="reviewer" id="rev-${i}">
+      <div class="hand-wrap">
+        <div class="paper-sheet">
+          <div class="paper-lines"></div>
+          <div class="review-text" id="revtext-${i}"></div>
+        </div>
+        <div class="hand-icon">✋</div>
+      </div>
+    </div>
+  `;
+  grid.appendChild(cell);
+}
+
+// --- Sound Engine (Web Audio API) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playWhack() {
+  // Satisfying thwack: noise burst + pitch drop
+  const bufSize = audioCtx.sampleRate * 0.12;
+  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 2);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.7, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+  // Low thud oscillator
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.1);
+  const oscGain = audioCtx.createGain();
+  oscGain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+  src.connect(gain); gain.connect(audioCtx.destination);
+  osc.connect(oscGain); oscGain.connect(audioCtx.destination);
+  src.start(); src.stop(audioCtx.currentTime + 0.12);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+}
+
+function playOops() {
+  // Sad descending tones for hitting a good reviewer
+  [400, 300, 200].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    const gain = audioCtx.createGain();
+    const t = audioCtx.currentTime + i * 0.1;
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.1);
+  });
+}
+
+function playEscape() {
+  // Quick low buzz for missed nasty reviewer
+  const osc = audioCtx.createOscillator();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.15);
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playPop() {
+  // Light pop when reviewer appears
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.08);
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+}
+
+function playWin() {
+  // Fanfare arpeggio
+  [523, 659, 784, 1047].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    const gain = audioCtx.createGain();
+    const t = audioCtx.currentTime + i * 0.12;
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.3);
+  });
+}
+
+function playLose() {
+  // Descending sad trombone-ish
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.6);
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.6);
+}
+
+// Key press handler
+document.addEventListener('keydown', (e) => {
+  if (!gameRunning) return;
+  // Resume audio context on first interaction
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const num = parseInt(e.key);
+  if (num >= 1 && num <= 9 && KEY_TO_CELL[num] !== undefined) {
+    handleHit(KEY_TO_CELL[num]);
+  }
+});
+
+function handleHit(idx) {
+  if (!gameRunning) return;
+  const cell = document.getElementById(`cell-${idx}`);
+  const rev = document.getElementById(`rev-${idx}`);
+
+  if (activeReviewers[idx]) {
+    const type = activeReviewers[idx].type;
+    clearTimeout(activeReviewers[idx].timeoutHide);
+    delete activeReviewers[idx];
+
+    rev.classList.remove('visible');
+    rev.classList.add('hit');
+    setTimeout(() => { rev.classList.remove('hit'); }, 300);
+
+    if (type === 'nasty') {
+      score += 2;
+      playWhack();
+      showPopup(cell, '+2', '#c0392b');
+      cell.classList.add('flash-bad');
+      setTimeout(() => cell.classList.remove('flash-bad'), 300);
+    } else {
+      score = Math.max(0, score - 3);
+      misses++;
+      playOops();
+      showPopup(cell, '-3 💔', '#e74c3c');
+      cell.classList.add('flash-good');
+      setTimeout(() => cell.classList.remove('flash-good'), 300);
+    }
+    updateHUD();
+    checkWin();
+  }
+}
+
+function spawnReviewer() {
+  if (!gameRunning) return;
+  // Pick a free cell
+  const free = [];
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (!activeReviewers[i]) free.push(i);
+  }
+  if (free.length === 0) return;
+
+  const idx = free[Math.floor(Math.random() * free.length)];
+  const type = Math.random() < diffConfig.nastyRatio ? 'nasty' : 'nice';
+  const text = type === 'nasty'
+    ? NASTY_REVIEWS[Math.floor(Math.random() * NASTY_REVIEWS.length)]
+    : NICE_REVIEWS[Math.floor(Math.random() * NICE_REVIEWS.length)];
+
+  const rev = document.getElementById(`rev-${idx}`);
+  const revText = document.getElementById(`revtext-${idx}`);
+  revText.textContent = text;
+  revText.className = 'review-text ' + (type === 'nasty' ? 'nasty' : 'nice');
+
+  rev.classList.remove('hit', 'dodge');
+  rev.classList.add('visible');
+  playPop();
+
+  // How long it stays up
+  const stayTime = diffConfig.stayMin + Math.random() * diffConfig.stayMax;
+  const timeoutHide = setTimeout(() => {
+    if (!activeReviewers[idx]) return;
+    const wasNasty = activeReviewers[idx].type === 'nasty';
+    delete activeReviewers[idx];
+    rev.classList.remove('visible');
+    rev.classList.add('dodge');
+    if (wasNasty) {
+      // Missed a nasty reviewer
+      misses++;
+      score = Math.max(0, score - 1);
+      playEscape();
+      updateHUD();
+    }
+    setTimeout(() => rev.classList.remove('dodge'), 300);
+  }, stayTime);
+
+  activeReviewers[idx] = { type, timeoutHide };
+}
+
+function updateHUD() {
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('miss-val').textContent = misses;
+  const pct = Math.min(100, (score / GOAL) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function updateTimer() {
+  document.getElementById('timer-val').textContent = timeLeft + 's';
+}
+
+function checkWin() {
+  if (score >= GOAL) {
+    endGame(true);
+  }
+}
+
+function showPopup(cell, text, color) {
+  const rect = cell.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'popup';
+  pop.textContent = text;
+  pop.style.color = color;
+  pop.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+  pop.style.top = (rect.top + rect.height / 2 - 20) + 'px';
+  document.body.appendChild(pop);
+  setTimeout(() => pop.remove(), 900);
+}
+
+function startGame(diff) {
+  if (diff) diffConfig = DIFFICULTY[diff];
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  score = 0;
+  misses = 0;
+  timeLeft = GAME_DURATION;
+  gameRunning = true;
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('end-screen').style.display = 'none';
+  updateHUD();
+  updateTimer();
+
+  // Spawn reviewers
+  spawnReviewer();
+  let spawnDelay = diffConfig.spawnStart;
+  function scheduleSpawn() {
+    if (!gameRunning) return;
+    spawnInterval = setTimeout(() => {
+      spawnReviewer();
+      spawnDelay = Math.max(diffConfig.spawnMin, spawnDelay - 15);
+      scheduleSpawn();
+    }, spawnDelay);
+  }
+  scheduleSpawn();
+
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimer();
+    if (timeLeft <= 0) endGame(false);
+  }, 1000);
+}
+
+function endGame(won) {
+  gameRunning = false;
+  clearTimeout(spawnInterval);
+  clearInterval(timerInterval);
+
+  // Hide all active reviewers
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (activeReviewers[i]) {
+      clearTimeout(activeReviewers[i].timeoutHide);
+      delete activeReviewers[i];
+      const rev = document.getElementById(`rev-${i}`);
+      rev.classList.remove('visible');
+    }
+  }
+
+  const endScreen = document.getElementById('end-screen');
+  if (won) playWin(); else playLose();
+  document.getElementById('end-title').textContent = won ? 'Accepted!' : 'Rejected!';
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('end-stamp-wrap').innerHTML = won
+    ? '<div class="accepted-stamp">ACCEPTED ✓</div>'
+    : '<div style="font-size:2rem;color:#c0392b;font-family:Special Elite,cursive;border:4px solid #c0392b;display:inline-block;padding:6px 16px;transform:rotate(5deg);margin:0.4em 0;opacity:0.85">REJECTED ✗</div>';
+  const journals = ['Nature', 'Science', 'PNAS', 'Proceedings B', 'Current Biology', 'Nature Ecology & Evolution', 'PLOS Biology', 'eLife', 'Cell', 'The American Naturalist'];
+  const journal = journals[Math.floor(Math.random() * journals.length)];
+  document.getElementById('end-message').textContent = won
+    ? `Congratulations! Your paper has been accepted in ${journal}!`
+    : `Time's up. The programme committee has rendered its verdict. Score: ${score}/${GOAL}.`;
+
+  endScreen.style.display = 'flex';
+}
+
+function restartGame() {
+  document.getElementById('end-screen').style.display = 'none';
+  document.getElementById('start-screen').style.display = 'flex';
+}
+</script>
+</body>
+</html>
